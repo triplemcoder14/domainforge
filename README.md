@@ -10,19 +10,19 @@
 
 ## Installation
 
-To install domainforge, you have two options:
+<!--To install domainforge, you have two options-->
 
-### Run:
+### To install Run:
 
 ```
 go install github.com/triplemcoder14/domainforge@latest
 ```
 
-Script installation:
+<!---Script installation:-->
 
-```sh
+<!--```sh
 curl -sSL https://raw.githubusercontent.com/triplemcoder14/domainforge/master/install.sh | sudo sh
-```
+```-->
 
 ## Usage
 
