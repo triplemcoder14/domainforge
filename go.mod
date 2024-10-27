@@ -5,7 +5,6 @@ go 1.21.0
 toolchain go1.22.3
 
 require (
-	github.com/mitchellh/go-homedir v1.1.0
 	github.com/oleksandr/bonjour v0.0.0-20210301155756-30f43c61b915
 	github.com/spf13/cobra v1.8.1
 )
@@ -13,6 +12,7 @@ require (
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/miekg/dns v1.1.59 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.25.0 // indirect

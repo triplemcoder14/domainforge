@@ -3,25 +3,117 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
 
+	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 )
 
-func run(cfg *Config) {
+type Config struct {
+	QulesAdmin   string `json:"qules_admin"`
+	AdminAddress string `json:"admin_address"`
+}
 
-	if err := ensureQulesRunning(cfg.QulesAdmin); err != nil {
-		log.Fatalf("failed to ensure Qules is running: %v", err)
+func defaultConfig() *Config {
+	return &Config{
+		QulesAdmin:   "http://localhost:1990",
+		AdminAddress: "localhost:2013",
+	}
+}
+
+func getConfigDir() (string, error) {
+	home, err := homedir.Dir()
+	if err != nil {
+		return "", err
 	}
 
+	var configDir string
+	switch runtime.GOOS {
+	case "windows":
+		configDir = filepath.Join(home, "AppData", "Roaming", "domainforge")
+	case "darwin":
+		configDir = filepath.Join(home, "Library", "Application Support", "domainforge")
+	default:
+		configDir = filepath.Join(home, ".config", "domainforge")
+	}
+
+	return configDir, nil
+}
+
+func saveConfig(cfg *Config) error {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return err
+	}
+
+	configFile := filepath.Join(configDir, "config.json")
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configFile, data, 0644)
+}
+
+func readConfig() (*Config, error) {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return &Config{}, err
+	}
+
+	configFile := filepath.Join(configDir, "config.json")
+	data, err := os.ReadFile(configFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return defaultConfig(), nil
+		}
+		return &Config{}, err
+	}
+
+	var cfg Config
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return &Config{}, err
+	}
+
+	return &cfg, nil
+}
+
+func getLocalIP() (string, error) {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return "", err
+	}
+	for _, addr := range addrs {
+		var ip net.IP
+		switch v := addr.(type) {
+		case *net.IPNet:
+			ip = v.IP
+		case *net.IPAddr:
+			ip = v.IP
+		}
+		if ip != nil && !ip.IsLoopback() && ip.To4() != nil {
+			return ip.String(), nil
+		}
+	}
+	return "", fmt.Errorf("no suitable local IP address found")
+}
+
+func run(cfg *Config) {
 	df := NewDomainForge()
 
 	listener, err := net.Listen("tcp", cfg.AdminAddress)
@@ -117,7 +209,6 @@ func handleConnection(ch chan struct{}, conn net.Conn, df *DomainForge) {
 			} else {
 				fmt.Fprintf(conn, "Removed domain: %s\n", domain)
 			}
-
 		case "list":
 			domains := df.List()
 			if len(domains) == 0 {
@@ -167,14 +258,13 @@ func sendCommand(command string) error {
 var rootCmd = &cobra.Command{
 	Use:   "domainforge",
 	Short: "domainForge is a tool for managing local domains",
-	Long: `domainForge enables you to handle local domains along with their associated ports.
-It works in conjunction with the Qules server to facilitate local domain resolution and routing.`,
+	Long:  `domainForge enables you to handle local domains along with their associated ports.`,
 }
 
 var addCmd = &cobra.Command{
 	Use:   "add <domain> --port <port>",
 	Short: "add a new domain",
-	Long:  `add a new domain to DomainForge with the specified port.`,
+	Long:  `Add a new domain to DomainForge with the specified port.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return fmt.Errorf("usage: domainforge add <domain> --port <port>")
@@ -190,7 +280,7 @@ var addCmd = &cobra.Command{
 var startCmd = &cobra.Command{
 	Use:   "start",
 	Short: "start the domainforge",
-	Long:  `start the domainforge, either in the foreground or as a detached process.`,
+	Long:  `Start the domainforge, either in the foreground or as a detached process.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		qulesAdmin, _ := cmd.Flags().GetString("qules")
 		adminAddr, _ := cmd.Flags().GetInt("addr")
@@ -263,8 +353,8 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().IntP("port", "p", 0, "port for the .local domain")
 	rootCmd.AddCommand(startCmd)
-	startCmd.Flags().IntP("addr", "a", 1990, "domainforge process address")
-	startCmd.Flags().StringP("qules", "c", "http://localhost:2013", "local qules admin address")
+	startCmd.Flags().IntP("addr", "a", 2013, "domainforge process address")
+	startCmd.Flags().StringP("qules", "c", "http://localhost:1990", "local qules admin address")
 	startCmd.Flags().BoolP("detached", "d", false, "run domainforge in background")
 	rootCmd.AddCommand(stopCmd())
 	rootCmd.AddCommand(removeCmd())
