@@ -64,7 +64,7 @@ domainforge list
 - Stop the service
 
 ````
-localbase stop
+domainforge stop
 ````
 
 
